@@ -1,5 +1,5 @@
 module statsLoggerExtension
 
-go 1.23
+go 1.20
 
-require github.com/indig0fox/a3go v0.2.1 // indirect
+require github.com/indig0fox/a3go v0.2.1

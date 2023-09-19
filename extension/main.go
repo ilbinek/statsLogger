@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/indig0fox/a3go/a3interface"
@@ -76,6 +77,13 @@ func main() {
 	fmt.Scanln()
 }
 
+func sanitize(arg []string) {
+	// Sanitize all strings
+	for i, v := range arg {
+		arg[i] = strings.ReplaceAll(v, "\"", "")
+	}
+}
+
 func writeTimeNow(id string) {
 	t := time.Now()
 	// format time
@@ -91,10 +99,12 @@ func reset(arg []string) {
 
 func setUpMission(arg []string) {
 	// Check size
-	if len(arg) != 5 {
-		log.Println("Error: Mission array size is not 5")
+	if len(arg) !=  6{
+		log.Println("Error: Mission array size is not 6")
+		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "MISSION ERROR", "WRONG MISSION PARAMS COUNT - [" + strings.Join(arg, ", ") + "]")
 		return
-	}	
+	}
+	sanitize(arg)
 	// Set up new mission
 	mission = Mission{
 		MissionName: arg[0],
@@ -108,10 +118,12 @@ func setUpMission(arg []string) {
 
 func win(arg []string) {
 	// Check size
-	if len(arg) != 4 {
-		log.Println("Error: Win array size is not 4")
+	if len(arg) != 5 {
+		log.Println("Error: Win array size is not 5")
+		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "WIN ERROR", "WRONG WIN PARAMS COUNT")
 		return
 	}
+	sanitize(arg)
 	// Set win
 	mission.Victory = arg[0]
 	mission.MissionEnd = arg[1]
@@ -121,10 +133,12 @@ func win(arg []string) {
 
 func addPlayer(arg []string) {
 	// Check size
-	if len(arg) != 6 {
-		log.Println("Error: Player array size is not 6")
+	if len(arg) != 7 {
+		log.Println("Error: Player array size is not 7")
+		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "PLAYER ERROR", "WRONG PLAYER PARAMS COUNT")
 		return
 	}
+	sanitize(arg)
 	// Create new player
 	player := Player{
 		UID: arg[0],
@@ -154,10 +168,12 @@ func addPlayer(arg []string) {
 
 func addKill(arg []string) {
 	// Check size
-	if len(arg) != 5 {
-		log.Println("Error: Kill array size is not 5")
+	if len(arg) != 6 {
+		log.Println("Error: Kill array size is not 6")
+		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "KILL ERROR", "WRONG KILL PARAMS COUNT")
 		return
 	}
+	sanitize(arg)
 	// Create new kill
 	kill := Kill{
 		Time: arg[0],
@@ -172,11 +188,12 @@ func addKill(arg []string) {
 
 func addShot(arg []string) {
 	// Check size
-	if len(arg) != 1 {
-		log.Println("Error: Shot array size is not 1")
+	if len(arg) != 2 {
+		log.Println("Error: Shot array size is not 2")
+		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "SHOT ERROR", "WRONG SHOT PARAMS COUNT")
 		return
 	}
-
+	sanitize(arg)
 	// Find the player
 	for i, p := range mission.Players {
 		if p.UID == arg[0] {
@@ -189,11 +206,12 @@ func addShot(arg []string) {
 
 func addHit(arg []string) {
 	// Check size
-	if len(arg) != 1 {
-		log.Println("Error: Hit array size is not 1")
+	if len(arg) != 2 {
+		log.Println("Error: Hit array size is not 2")
+		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "HIT ERROR", "WRONG HIT PARAMS COUNT")
 		return
 	}
-
+	sanitize(arg)
 	// Find the player
 	for i, p := range mission.Players {
 		if p.UID == arg[0] {
@@ -205,12 +223,14 @@ func addHit(arg []string) {
 }
 
 func addFPS(arg []string) {
+	sanitize(arg)
 	// For every FPS value
-	for _, fps := range arg {
+	for _, fps := range arg[:len(arg) - 1] {
 		// Convert to float64
 		f, err := strconv.ParseFloat(fps, 64)
 		if err != nil {
 			log.Println("Error: FPS is not a float64")
+			a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "FPS ERROR", "FPS IS NOT A FLOAT64")
 			return
 		}
 
@@ -220,19 +240,23 @@ func addFPS(arg []string) {
 }
 
 func export(arg []string) {
+	sanitize(arg)
 	// Export mission
 	// Get executable path
 	p := modulePathDir + "\\stats\\"
 	os.MkdirAll(p, os.ModePerm)
 
 	// Generate filename
-	t := time.Now().Format(time.RFC3339)
-	filename := p + t + "_" + mission.MissionName + ".json"
+	year, month, day := time.Now().Date()
+	hours, minutes, _ := time.Now().Clock()
+	filename := fmt.Sprintf("%s%d-%d-%d-%d-%d_%s.json", p, year, int(month), day, hours, minutes, mission.MissionName)
 
 	// Write mission to file
 	data, err := json.MarshalIndent(mission, "", "    ")
 	if err != nil {
 		log.Println("Error: Could not marshal mission")
+		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "EXPORT ERROR", err.Error())
+		a3ErrorChan <- err
 		return
 	}
 
@@ -242,6 +266,10 @@ func export(arg []string) {
 	// Check for errors
 	if err != nil {
 		log.Println("Error: Could not write mission to file")
+		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "EXPORT ERROR", err.Error())
+		a3ErrorChan <- err
 		return
 	}
+
+	a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "EXPORT DONE", "EXPORT FINISHED")
 }
