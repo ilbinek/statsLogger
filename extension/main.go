@@ -111,8 +111,7 @@ func setUpMission(arg []string) {
 		Worldname: arg[1],
 		MissionAuthor: arg[2],
 		MissionType: arg[3],
-		Victory: arg[4],
-		MissionStart: arg[5],
+		MissionStart: arg[4],
 	}
 }
 
@@ -180,7 +179,7 @@ func addKill(arg []string) {
 		Victim: arg[1],
 		Weapon: arg[2],
 		Distance: arg[3],
-		Time: arg[5],
+		Time: arg[4],
 	}
 	// Add kill to mission
 	mission.Kills = append(mission.Kills, kill)
