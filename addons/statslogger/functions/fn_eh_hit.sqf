@@ -1,4 +1,4 @@
-//params ["_unit", "_source", "_damage", "_instigator"];
-private _tmp = [getPlayerUID (_this select 1)];
-diag_log(text ('[STATS] ' + str(_tmp)));
+params ["_unit", "_causedBy", "_damage", "_instigator"];
+diag_log("HIT HIT HIT HIT");
+private _tmp = [getPlayerUID _instigator];
 "stats_logger" callExtension [":HIT:", _tmp];
