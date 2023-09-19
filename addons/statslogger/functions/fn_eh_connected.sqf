@@ -17,9 +17,9 @@ if ((_this#4) != 2) then {
             !isNull _unit;
         };
         
-        _strClass = typeOf _unit;
+        private _strClass = typeOf _unit;
         
-        _strRole = gettext(configFile >> "Cfgvehicles" >> typeOf(_unit) >> "displayname");
+        private _strRole = gettext(configFile >> "Cfgvehicles" >> typeOf(_unit) >> "displayname");
         if ((roleDescription _unit) != "") then {
             _nbr = (roleDescription _unit) find "@";
             if (_nbr < 0) then {
@@ -29,26 +29,14 @@ if ((_this#4) != 2) then {
             };
         };
         
-        _side = str (side _unit);
-        _group = str (group _unit);
-        _tmp = ["PLAYER", _uid, _name, _strRole, _strClass, _side, _group] joinstring "::";
-        diag_log(text ('[STATS] ' + _tmp));
-        "Stats" callExtension _tmp;
+        private _side = str (side _unit);
+        private _group = str (group _unit);
+        private _tmp = [_uid, _name, _strRole, _strClass, _side, _group];
+        diag_log(text ('[STATS] ' + str(_tmp)));
+        "stats_logger" callExtension [":PLAYER:", _tmp];
 
         _unit addEventHandler ["firedMan", {
             _this call statslogger_fnc_eh_fired;
-        }];
-
-        // TODO Will add hits, just not working for now
-        /*_unit addMPEventHandler ["MPhit", {
-            _this call statslogger_fnc_eh_fired;
-        }];*/
-
-        // If unit is respawned, something weird happens, so this should get around it
-        _unit addEventHandler ["Respawn", {
-            _unit addEventHandler ["firedMan", {
-                _this call statslogger_fnc_eh_fired;
-            }];
         }];
     };
 };

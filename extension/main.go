@@ -176,11 +176,11 @@ func addKill(arg []string) {
 	sanitize(arg)
 	// Create new kill
 	kill := Kill{
-		Time: arg[0],
+		Killer: arg[0],
 		Victim: arg[1],
-		Killer: arg[2],
-		Weapon: arg[3],
-		Distance: arg[4],
+		Weapon: arg[2],
+		Distance: arg[3],
+		Time: arg[5],
 	}
 	// Add kill to mission
 	mission.Kills = append(mission.Kills, kill)
