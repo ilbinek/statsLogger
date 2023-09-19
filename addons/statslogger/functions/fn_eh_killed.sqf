@@ -16,20 +16,20 @@ params ["_victim", "_killer", "_instigator"];
     } else {
          _killer
     };
-    _time = dayTime;
-    _tmpTime = [_time, "HH:MM"] call BIS_fnc_timeToString;
-    _weapon = [_killer] call statslogger_fnc_getEventWeaponText;
-    _uid = "0";
+    private _time = dayTime;
+    private _tmpTime = [_time, "HH:MM"] call BIS_fnc_timeToString;
+    private _weapon = [_killer] call statslogger_fnc_getEventWeaponText;
+    private _uid = "0";
     if (isPlayer _victim) then {
         _uid = getPlayerUID _victim;
     };
-    _uidk = "0";
+    private _uidk = "0";
     if (isPlayer _killer) then {
         _uidk = getPlayerUID _killer;
     };
     if (_uidk != "0" && _uid != "0") then {
-        _tmp = ["KILL", _uidk, _uid, _weapon, round(_killer distance _victim), _tmpTime] joinString "::";
-        diag_log(text ('[STATS] ' + _tmp));
-        "Stats" callExtension _tmp;
+        private _tmp = [_uidk, _uid, _weapon, round(_killer distance _victim), _tmpTime];
+        diag_log(text ('[STATS] ' + str(_tmp)));
+        "stats_logger" callExtension [":KILL:", _tmp];
     }
 };

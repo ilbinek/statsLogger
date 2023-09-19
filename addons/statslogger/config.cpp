@@ -4,10 +4,10 @@ class CfgPatches {
         name = "StatsLogger";
         author = "ilbinek";
         authors[] = {"ilbinek"};
-        url = "https://github.com/ilbinek";
-        version = 0.1;
-        versionStr = "0.1";
-        versionAr[] = {0, 1};
+        url = "https://github.com/ilbinek/statsLogger";
+        version = 0.3;
+        versionStr = "0.3";
+        versionAr[] = {0, 3};
         requiredAddons[] = {};
         requiredVersion = 2.04;
         units[] = {};
@@ -28,6 +28,7 @@ class CfgFunctions {
             class eh_fired {};
             //class eh_hit {};
             class mission_end{};
+            class fpsLoop{};
         };
     };
 };
