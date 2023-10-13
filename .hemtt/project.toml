@@ -1,0 +1,37 @@
+name      ="statsLogger"
+author    ="ilbinek"
+prefix    ="statslogger"
+mainprefix="x"
+
+[files]
+include=["LICENSE.md", "README.md", "*.dll", "*.so"]
+
+[version]
+path="addons/main/script_version.hpp" # Default
+
+major=0 # Overrides path when set
+minor=3
+patch=0
+# build = 0 # Optional
+
+git_hash=0 # Default: 8
+
+# Launched with `hemtt launch`
+[hemtt.launch.default]
+workshop=[
+  "450814997", # CBA_A3's Workshop ID
+]
+dlc=[]
+optionals=[]
+parameters=[
+  "-skipIntro",        # These parameters are passed to the Arma 3 executable
+  "-noSplash",         # They do not need to be added to your list
+  "-showScriptErrors", # You can add additional parameters here
+  "-debug",
+  "-filePatching",
+]
+executable="arma3_x64" # Default: "arma3_x64"
+
+[hemtt.release]
+sign   =false # Default: true
+archive=true  # Default: true
