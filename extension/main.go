@@ -416,8 +416,6 @@ func onExport(
 
 	// First, marshal to indented JSON for easy viewing
 	missionBytes, err := json.MarshalIndent(&mission, "", "    ")
-	// If not viewer friendly, don't use indentation
-	missionBytes, err = json.Marshal(&mission)
 	// catch error
 	if err != nil {
 		log.Println("Error: Could not marshal mission")
