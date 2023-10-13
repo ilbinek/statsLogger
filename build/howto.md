@@ -34,7 +34,10 @@ rm ./stats_logger.dll
 mv ./extension/dist/stats_logger.dll ./stats_logger.dll
 
 # Compile x64 Windows EXE
-docker run --rm -it -v ${PWD}:/go/work -w /go/work -e GOARCH=amd64 -e CGO_ENABLED=1 x1unix/go-mingw:1.20 go build -o ./dist/stats_logger_x64.exe -ldflags "-w -s -X main.EXTENSION_VERSION=$version" .
+docker run --rm -it -v ${PWD}\extension:/go/work -w /go/work -e GOARCH=amd64 -e CGO_ENABLED=1 x1unix/go-mingw:1.20 go build -o ./dist/stats_logger_x64.exe -ldflags "-w -s -X main.EXTENSION_VERSION=$version" .
+
+rm ./stats_logger_x64.exe
+mv ./extension/dist/stats_logger_x64.exe ./stats_logger_x64.exe
 ```
 
 ## COMPILING FOR LINUX

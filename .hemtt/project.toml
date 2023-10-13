@@ -4,7 +4,7 @@ prefix    ="statslogger"
 mainprefix="x"
 
 [files]
-include=["LICENSE.md", "README.md", "*.dll", "*.so"]
+include=["mod.cpp", "LICENSE.md", "README.md", "*.dll", "*.so"]
 
 [version]
 path="addons/main/script_version.hpp" # Default
