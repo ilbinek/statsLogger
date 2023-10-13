@@ -38,6 +38,25 @@ func init() {
 		SetRunInBackground(false).
 		Register()
 
+		// when a3 sends this, set logging to INFO+
+	a3interface.NewRegistration(":SET:DEBUG:OFF:").
+		SetFunction(func(ctx a3interface.ArmaExtensionContext, data string) (string, error) {
+			thisLogger := logger.With().
+				Interface("context", ctx).
+				Str("call_type", "RvExtension").
+				Str("command", ":SET:DEBUG:OFF:").
+				Str("data", data).
+				Logger()
+
+			thisLogger.Debug().Send()
+
+			zerolog.SetGlobalLevel(zerolog.InfoLevel)
+
+			return "", nil
+		}).
+		SetRunInBackground(false).
+		Register()
+
 	a3interface.NewRegistration(":RESET:").
 		SetFunction(onReset).
 		SetRunInBackground(false).
@@ -92,11 +111,12 @@ func init() {
 		panic(err)
 	}
 
+	// default to debug on logger
 	logger = zerolog.New(zerolog.ConsoleWriter{
 		Out:        logFile,
 		TimeFormat: time.RFC3339,
 		NoColor:    true,
-	}).With().Timestamp().Caller().Logger()
+	}).With().Timestamp().Caller().Logger().Level(zerolog.DebugLevel)
 }
 
 // onTimeNowUTC :GET:TIME: returns the current time in UTC

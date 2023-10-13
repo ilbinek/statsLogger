@@ -65,3 +65,6 @@ diag_log(text ('[STATS] Called Stats with ' + str(_tmp)));
 diag_log(text ('[STATS] Starting FPS LOOP'));
 call statslogger_fnc_fpsLoop;
 diag_log(text ('[STATS] Started FPS LOOP'));
+
+
+"stats_logger" callExtension ":SET:DEBUG:OFF:";
