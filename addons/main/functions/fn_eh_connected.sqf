@@ -61,5 +61,9 @@ if (
         _unit addEventHandler ["firedMan", {
             _this call statslogger_fnc_eh_fired;
         }];
+
+         _unit addMPEventHandler ["MPHit", { 
+            _this call statslogger_fnc_eh_hit; 
+        }]; 
     };
 };

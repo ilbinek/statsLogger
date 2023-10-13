@@ -26,7 +26,7 @@ class CfgFunctions {
             class export {};
             class getEventWeaponText {};
             class eh_fired {};
-            //class eh_hit {};
+            class eh_hit {}; 
             class mission_end{};
             class fpsLoop{};
         };
