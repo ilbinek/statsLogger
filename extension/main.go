@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ilbinek/statsLogger/db"
+	"gorm.io/gorm"
 
 	"github.com/rs/zerolog"
 
@@ -326,8 +327,16 @@ func onAddPlayerArgs(
 		receivedPlayer.PlayerUID,
 		mission.ID,
 	).First(&dbPlayer)
-	if dbPlayer.PlayerUID == "" {
-		err := db.Client().Create(&receivedPlayer).Error
+	if (db.Client().Error != nil) && !errors.Is(db.Client().Error, gorm.ErrRecordNotFound) {
+		thisLogger.Error().Err(db.Client().Error).
+			Str("player_uid", receivedPlayer.PlayerUID).
+			Msg("DB Error")
+		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "PLAYER ERROR", "DB ERROR")
+		return "", db.Client().Error
+	}
+
+	if dbPlayer.ID == 0 {
+		err := db.Client().Model(&mission).Association("Players").Append(&receivedPlayer)
 		if err != nil {
 			thisLogger.Error().Err(err).
 				Interface("player", &receivedPlayer).
