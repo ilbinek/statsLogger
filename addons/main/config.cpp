@@ -5,9 +5,9 @@ class CfgPatches {
         author = "ilbinek";
         authors[] = {"ilbinek"};
         url = "https://github.com/ilbinek/statsLogger";
-        version = 0.3;
-        versionStr = "0.3";
-        versionAr[] = {0, 3};
+        version = 0.4;
+        versionStr = "0.4";
+        versionAr[] = {0, 4};
         requiredAddons[] = {};
         requiredVersion = 2.04;
         units[] = {};

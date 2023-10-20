@@ -22,7 +22,7 @@
 			"Status",
 			(
 				"Stats Addon initialised<br/>" +
-				"Version 0.3<br/>" +
+				"Version 0.4<br/>" +
 				"Capture is running."
 			)
 		]
@@ -65,3 +65,6 @@ diag_log(text ('[STATS] Called Stats with ' + str(_tmp)));
 diag_log(text ('[STATS] Starting FPS LOOP'));
 call statslogger_fnc_fpsLoop;
 diag_log(text ('[STATS] Started FPS LOOP'));
+
+
+"stats_logger" callExtension ":SET:DEBUG:OFF:";
