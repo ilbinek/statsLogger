@@ -23,7 +23,7 @@ type Mission struct {
 }
 
 type Player struct {
-	ID        uint     `gorm:"uniqueIndex"`
+	ID        uint     `json:"id" gorm:"uniqueIndex"`
 	PlayerUID string   `json:"playerUID" gorm:"index"` // Player UID
 	Name      string   `json:"name"`
 	Side      string   `json:"side"`

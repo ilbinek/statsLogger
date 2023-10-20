@@ -22,7 +22,7 @@
 			"Status",
 			(
 				"Stats Addon initialised<br/>" +
-				"Version 0.3<br/>" +
+				"Version 0.4<br/>" +
 				"Capture is running."
 			)
 		]

@@ -10,7 +10,7 @@ include=["mod.cpp", "LICENSE.md", "README.md", "*.dll", "*.so"]
 path="addons/main/script_version.hpp" # Default
 
 major=0 # Overrides path when set
-minor=3
+minor=4
 patch=0
 # build = 0 # Optional
 

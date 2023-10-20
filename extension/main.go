@@ -39,7 +39,7 @@ func init() {
 		SetRunInBackground(false).
 		Register()
 
-		// when a3 sends this, set logging to INFO+
+	// when a3 sends this, set logging to INFO+
 	a3interface.NewRegistration(":SET:DEBUG:OFF:").
 		SetFunction(func(ctx a3interface.ArmaExtensionContext, data string) (string, error) {
 			thisLogger := logger.With().
@@ -52,6 +52,24 @@ func init() {
 			thisLogger.Debug().Send()
 
 			zerolog.SetGlobalLevel(zerolog.InfoLevel)
+
+			return "", nil
+		}).
+		SetRunInBackground(false).
+		Register()
+
+		a3interface.NewRegistration(":SET:DEBUG:ON:").
+		SetFunction(func(ctx a3interface.ArmaExtensionContext, data string) (string, error) {
+			thisLogger := logger.With().
+				Interface("context", ctx).
+				Str("call_type", "RvExtension").
+				Str("command", ":SET:DEBUG:ON:").
+				Str("data", data).
+				Logger()
+
+			thisLogger.Debug().Send()
+
+			zerolog.SetGlobalLevel(zerolog.DebugLevel)
 
 			return "", nil
 		}).
@@ -448,42 +466,26 @@ func onAddShotArgs(
 		args[i] = a3interface.RemoveEscapeQuotes(v)
 	}
 
-	// Find the player
-	shooter := Player{}
-	db.Client().Where(&Player{
-		PlayerUID: args[0],
-		MissionID: mission.ID,
-	}).First(&shooter)
-
-	if shooter.ID == 0 {
-		thisLogger.Error().Err(db.Client().Error).
-			Str("player_uid", args[0]).
-			Msg("Could not find shooter")
-		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "SHOT ERROR", "COULD NOT FIND SHOOTER")
-		return "", errors.New("could not find shooter")
-	}
-	if db.Client().Error != nil {
-		thisLogger.Error().Err(db.Client().Error).
-			Str("player_uid", args[0]).
-			Msg("DB Error")
-		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "SHOT ERROR", "DB ERROR")
-		return "", errors.New("db error")
-	}
-
-	// Increment shots
-	shooter.Shots++
-
-	// Update player
-	if err := db.Client().Save(&shooter).Error; err != nil {
-		thisLogger.Error().Err(err).
-			Interface("player", &shooter).
-			Msg("Could not update player")
-		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "SHOT ERROR", err.Error())
-		return "", err
+	// Find the player and update it
+	for i, v := range mission.Players {
+		if v.PlayerUID == args[0] {
+			err := db.Client().Model(&(mission.Players[i])).Updates(&Player{
+				Shots: (mission.Players[i].Shots + 1),
+			}).Error
+			
+			if err != nil {
+				thisLogger.Error().Err(db.Client().Error).
+					Str("player_uid", args[0]).
+					Msg("DB Error")
+				a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "SHOT ERROR", "DB ERROR")
+				return "", errors.New("db error")
+			}
+			return `["Saved shot data!"]`, nil
+		}
 	}
 
 	// Send data back to Arma
-	return `["Saved shot data!"]`, nil
+	return "", errors.New("no player found error")
 }
 
 // addHit :HIT: adds a hit to the mission
@@ -514,42 +516,27 @@ func onAddHitArgs(
 		args[i] = a3interface.RemoveEscapeQuotes(v)
 	}
 
-	// Find the shooter
-	shooter := Player{}
-	db.Client().Where(&Player{
-		PlayerUID: args[0],
-		MissionID: mission.ID,
-	}).First(&shooter)
+	// Find the shooter and update it
+	for i, v := range mission.Players {
+		if v.PlayerUID == args[0] {
+			err := db.Client().Model(&(mission.Players[i])).Updates(&Player{
+				Hits: (mission.Players[i].Hits + 1),
+			}).Error
 
-	if shooter.ID == 0 {
-		thisLogger.Error().Err(db.Client().Error).
-			Str("player_uid", args[0]).
-			Msg("Could not find shooter")
-		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "HIT ERROR", "COULD NOT FIND SHOOTER")
-		return "", errors.New("could not find shooter")
-	}
-	if db.Client().Error != nil {
-		thisLogger.Error().Err(db.Client().Error).
-			Str("player_uid", args[0]).
-			Msg("DB Error")
-		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "HIT ERROR", "DB ERROR")
-		return "", errors.New("db error")
-	}
+			if err != nil {
+				thisLogger.Error().Err(db.Client().Error).
+					Str("player_uid", args[0]).
+					Msg("DB Error")
+				a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "SHOT ERROR", "DB ERROR")
+				return "", errors.New("db error")
+			}
 
-	// Increment hits
-	shooter.Hits++
-
-	// Update player
-	if err := db.Client().Save(&shooter).Error; err != nil {
-		thisLogger.Error().Err(err).
-			Interface("player", &shooter).
-			Msg("Could not update player")
-		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "HIT ERROR", err.Error())
-		return "", err
+			return `["Saved hit data!"]`, nil
+		}
 	}
 
 	// Send data back to Arma
-	return `["Saved hit data!"]`, nil
+	return "", errors.New("no player found error")
 }
 
 // onAddFPSArgs :FPS: adds FPS data to the mission
