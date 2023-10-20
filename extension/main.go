@@ -4,12 +4,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ilbinek/statsLogger/db"
+	"gorm.io/gorm"
+
+	"github.com/rs/zerolog"
 
 	"github.com/indig0fox/a3go/a3interface"
 	"github.com/indig0fox/a3go/assemblyfinder"
@@ -25,10 +29,32 @@ var EXTENSION_NAME = "STATS_LOGGER"
 
 var mission Mission
 
+var logFile *os.File
+var logger zerolog.Logger
+
 func init() {
 	a3interface.SetVersion("1.0.0")
 	a3interface.NewRegistration(":GET:TIME:").
 		SetFunction(onTimeNowUTC).
+		SetRunInBackground(false).
+		Register()
+
+		// when a3 sends this, set logging to INFO+
+	a3interface.NewRegistration(":SET:DEBUG:OFF:").
+		SetFunction(func(ctx a3interface.ArmaExtensionContext, data string) (string, error) {
+			thisLogger := logger.With().
+				Interface("context", ctx).
+				Str("call_type", "RvExtension").
+				Str("command", ":SET:DEBUG:OFF:").
+				Str("data", data).
+				Logger()
+
+			thisLogger.Debug().Send()
+
+			zerolog.SetGlobalLevel(zerolog.InfoLevel)
+
+			return "", nil
+		}).
 		SetRunInBackground(false).
 		Register()
 
@@ -80,6 +106,18 @@ func init() {
 		SetFunction(onExport).
 		SetRunInBackground(false).
 		Register()
+
+	logFile, err := os.Create(filepath.Join(modulePathDir, "stats.log"))
+	if err != nil {
+		panic(err)
+	}
+
+	// default to debug on logger
+	logger = zerolog.New(zerolog.ConsoleWriter{
+		Out:        logFile,
+		TimeFormat: time.RFC3339,
+		NoColor:    true,
+	}).With().Timestamp().Caller().Logger().Level(zerolog.DebugLevel)
 }
 
 // onTimeNowUTC :GET:TIME: returns the current time in UTC
@@ -87,10 +125,21 @@ func onTimeNowUTC(
 	ctx a3interface.ArmaExtensionContext,
 	data string,
 ) (string, error) {
+	thisLogger := logger.With().
+		Interface("context", ctx).
+		Str("call_type", "RvExtension").
+		Str("command", ":GET:TIME:").
+		Str("data", data).
+		Logger()
+
+	thisLogger.Debug().Send()
+
+	// get time
 	t := time.Now().UTC()
 	// format time
 	timeNow := t.Format("2006-01-02 15:04:05")
 	// send data back to Arma
+	thisLogger.Debug().Msgf("Returning time: %s", timeNow)
 	return string(timeNow), nil
 }
 
@@ -99,6 +148,14 @@ func onReset(
 	ctx a3interface.ArmaExtensionContext,
 	data string,
 ) (string, error) {
+	thisLogger := logger.With().
+		Interface("context", ctx).
+		Str("call_type", "RvExtension").
+		Str("command", ":RESET:").
+		Str("data", data).
+		Logger()
+
+	thisLogger.Debug().Send()
 	// reset mission struct
 	mission = Mission{}
 	// send data back to Arma
@@ -118,9 +175,17 @@ func onSetupMissionArgs(
 	// 3: mission type (ex. public)
 	// 4: time of day at mission start (daytime)
 
+	thisLogger := logger.With().
+		Interface("context", ctx).
+		Str("call_type", "RvExtensionArgs").
+		Str("command", ":MISSION:").
+		Logger()
+
+	thisLogger.Debug().Send()
+
 	// Check size
 	if len(args) != 5 {
-		log.Println("Error: Mission array size is not 5")
+		thisLogger.Error().Err(errors.New("mission array size is not 5")).Strs("args", args).Send()
 		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "MISSION ERROR", "WRONG MISSION PARAMS COUNT - ["+strings.Join(args, ", ")+"]")
 		return "", errors.New("mission array size is not 5")
 	}
@@ -138,6 +203,25 @@ func onSetupMissionArgs(
 		// Victory:       args[4], // not in sqf
 		MissionStart: args[4],
 	}
+
+	thisLogger.Info().Errs(
+		"migrations", []error{
+			db.Client().AutoMigrate(&Mission{}),
+			db.Client().AutoMigrate(&Player{}),
+			db.Client().AutoMigrate(&Kill{}),
+			db.Client().AutoMigrate(&FPSRecord{}),
+		},
+	).Msg("Migrating tables")
+
+	// Create new mission
+	thisLogger.Debug().Interface("mission", &mission).Msg("Creating mission")
+
+	err := db.Client().Create(&mission).Error
+	if err != nil {
+		thisLogger.Error().Err(err).Msg("Could not create mission")
+		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "MISSION ERROR", err.Error())
+		return "", err
+	}
 	// send data back to Arma
 	return `["Saved mission data!"]`, nil
 }
@@ -154,9 +238,17 @@ func onWinArgs(
 	// 2: blue score
 	// 3: red score
 
+	thisLogger := logger.With().
+		Interface("context", ctx).
+		Str("call_type", "RvExtensionArgs").
+		Str("command", ":WIN:").
+		Logger()
+
+	thisLogger.Debug().Send()
+
 	// Check size
 	if len(args) != 4 {
-		log.Println("Error: Win array size is not 4")
+		thisLogger.Error().Err(errors.New("win array size is not 4")).Strs("args", args).Send()
 		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "WIN ERROR", "WRONG WIN PARAMS COUNT")
 		return "", errors.New("win array size is not 4")
 	}
@@ -170,6 +262,16 @@ func onWinArgs(
 	mission.MissionEnd = args[1]
 	mission.ScoreBlue = args[2]
 	mission.ScoreRed = args[3]
+
+	thisLogger.Trace().Interface("mission", &mission).Msg("Updating mission")
+
+	// Update mission
+	err := db.Client().Save(&mission).Error
+	if err != nil {
+		thisLogger.Error().Err(err).Msg("Could not update mission")
+		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "WIN ERROR", err.Error())
+		return "", err
+	}
 
 	// send data back to Arma
 	return `["Saved win data!"]`, nil
@@ -189,9 +291,17 @@ func onAddPlayerArgs(
 	// 4: side (WEST, EAST, etc.)
 	// 5: groupID (str group _x)
 
+	thisLogger := logger.With().
+		Interface("context", ctx).
+		Str("call_type", "RvExtensionArgs").
+		Str("command", ":PLAYER:").
+		Logger()
+
+	thisLogger.Debug().Send()
+
 	// Check size
 	if len(args) != 6 {
-		log.Println("Error: Player array size is not 6")
+		thisLogger.Error().Err(errors.New("player array size is not 6")).Strs("args", args).Send()
 		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "PLAYER ERROR", "WRONG PLAYER PARAMS COUNT")
 		return "", errors.New("player array size is not 6")
 	}
@@ -201,32 +311,55 @@ func onAddPlayerArgs(
 	}
 
 	// Create new player
-	player := Player{
-		UID:   args[0],
-		Name:  args[1],
-		Role:  args[2],
-		Class: args[3],
-		Side:  args[4],
-		Squad: args[5],
+	receivedPlayer := Player{
+		PlayerUID: args[0],
+		Name:      args[1],
+		Role:      args[2],
+		Class:     args[3],
+		Side:      args[4],
+		Squad:     args[5],
+		Mission:   &mission,
 	}
 
-	// Check if this player is already in the mission
-	for _, p := range mission.Players {
-		if p.UID == player.UID {
-			// Player already in mission so just update
-			p.Update(PlayerUpdateOptions{
-				Name:  player.Name,
-				Side:  player.Side,
-				Squad: player.Squad,
-				Role:  player.Role,
-				Class: player.Class,
-			})
-			return `["Updated player data!"]`, nil
+	var dbPlayer Player
+	db.Client().Model(&Player{}).Where(
+		"player_uid = ? AND mission_id = ?",
+		receivedPlayer.PlayerUID,
+		mission.ID,
+	).First(&dbPlayer)
+	if (db.Client().Error != nil) && !errors.Is(db.Client().Error, gorm.ErrRecordNotFound) {
+		thisLogger.Error().Err(db.Client().Error).
+			Str("player_uid", receivedPlayer.PlayerUID).
+			Msg("DB Error")
+		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "PLAYER ERROR", "DB ERROR")
+		return "", db.Client().Error
+	}
+
+	if dbPlayer.ID == 0 {
+		err := db.Client().Model(&mission).Association("Players").Append(&receivedPlayer)
+		if err != nil {
+			thisLogger.Error().Err(err).
+				Interface("player", &receivedPlayer).
+				Msg("Could not create player")
+			a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "PLAYER ERROR", err.Error())
+			return "", err
+		}
+	} else {
+		err := db.Client().Model(&dbPlayer).Updates(Player{
+			Name:  receivedPlayer.Name,
+			Side:  receivedPlayer.Side,
+			Squad: receivedPlayer.Squad,
+			Role:  receivedPlayer.Role,
+			Class: receivedPlayer.Class,
+		}).Error
+		if err != nil {
+			thisLogger.Error().Err(err).
+				Interface("player", &dbPlayer).
+				Msg("Could not update player")
+			a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "PLAYER ERROR", err.Error())
+			return "", err
 		}
 	}
-
-	// Add player to mission
-	mission.AddPlayer(&player)
 
 	// Send data back to Arma
 	return `["Saved player data!"]`, nil
@@ -245,9 +378,17 @@ func onAddKillArgs(
 	// 3: distance
 	// 4: time
 
+	thisLogger := logger.With().
+		Interface("context", ctx).
+		Str("call_type", "RvExtensionArgs").
+		Str("command", ":KILL:").
+		Logger()
+
+	thisLogger.Debug().Send()
+
 	// Check size
 	if len(args) != 5 {
-		log.Println("Error: Kill array size is not 5")
+		thisLogger.Error().Err(errors.New("kill array size is not 5")).Strs("args", args).Send()
 		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "KILL ERROR", "WRONG KILL PARAMS COUNT")
 		return "", errors.New("kill array size is not 5")
 	}
@@ -264,16 +405,15 @@ func onAddKillArgs(
 		Distance: args[3],
 		Time:     args[4],
 	}
-	// Add kill to mission
-	mission.AddKill(&kill)
 
-	// Find the killer
-	for i, p := range mission.Players {
-		if p.UID == args[0] {
-			// Increment kills
-			mission.Players[i].AddKill()
-			return `["Saved kill data!"]`, nil
-		}
+	// Add kill to mission associations
+	err := db.Client().Model(&mission).Association("Kills").Append(&kill)
+	if err != nil {
+		thisLogger.Error().Err(err).
+			Interface("kill", &kill).
+			Msg("Could not add kill to mission")
+		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "KILL ERROR", err.Error())
+		return "", err
 	}
 
 	// Send data back to Arma
@@ -289,9 +429,17 @@ func onAddShotArgs(
 	// args are:
 	// 0: playerUID
 
+	thisLogger := logger.With().
+		Interface("context", ctx).
+		Str("call_type", "RvExtensionArgs").
+		Str("command", ":SHOT:").
+		Logger()
+
+	thisLogger.Debug().Send()
+
 	// Check size
 	if len(args) != 1 {
-		log.Println("Error: Shot array size is not 1")
+		thisLogger.Error().Err(errors.New("shot array size is not 1")).Strs("args", args).Send()
 		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "SHOT ERROR", "WRONG SHOT PARAMS COUNT")
 		return "", errors.New("shot array size is not 1")
 	}
@@ -301,13 +449,37 @@ func onAddShotArgs(
 	}
 
 	// Find the player
-	for i, p := range mission.Players {
-		if p.UID == args[0] {
-			// Increment shots
-			// do so using a method which uses the mutex
-			mission.Players[i].AddShot()
-			return `["Saved shot data!"]`, nil
-		}
+	shooter := Player{}
+	db.Client().Where(&Player{
+		PlayerUID: args[0],
+		MissionID: mission.ID,
+	}).First(&shooter)
+
+	if shooter.ID == 0 {
+		thisLogger.Error().Err(db.Client().Error).
+			Str("player_uid", args[0]).
+			Msg("Could not find shooter")
+		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "SHOT ERROR", "COULD NOT FIND SHOOTER")
+		return "", errors.New("could not find shooter")
+	}
+	if db.Client().Error != nil {
+		thisLogger.Error().Err(db.Client().Error).
+			Str("player_uid", args[0]).
+			Msg("DB Error")
+		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "SHOT ERROR", "DB ERROR")
+		return "", errors.New("db error")
+	}
+
+	// Increment shots
+	shooter.Shots++
+
+	// Update player
+	if err := db.Client().Save(&shooter).Error; err != nil {
+		thisLogger.Error().Err(err).
+			Interface("player", &shooter).
+			Msg("Could not update player")
+		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "SHOT ERROR", err.Error())
+		return "", err
 	}
 
 	// Send data back to Arma
@@ -323,9 +495,17 @@ func onAddHitArgs(
 	// args are:
 	// 0: playerUID
 
+	thisLogger := logger.With().
+		Interface("context", ctx).
+		Str("call_type", "RvExtensionArgs").
+		Str("command", ":HIT:").
+		Logger()
+
+	thisLogger.Debug().Send()
+
 	// Check size
 	if len(args) != 1 {
-		log.Println("Error: Hit array size is not 1")
+		thisLogger.Error().Err(errors.New("hit array size is not 1")).Strs("args", args).Send()
 		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "HIT ERROR", "WRONG HIT PARAMS COUNT")
 		return "", errors.New("hit array size is not 1")
 	}
@@ -334,13 +514,38 @@ func onAddHitArgs(
 		args[i] = a3interface.RemoveEscapeQuotes(v)
 	}
 
-	// Find the player
-	for i, p := range mission.Players {
-		if p.UID == args[0] {
-			// Increment hits
-			mission.Players[i].Hits++
-			return `["Saved hit data!"]`, nil
-		}
+	// Find the shooter
+	shooter := Player{}
+	db.Client().Where(&Player{
+		PlayerUID: args[0],
+		MissionID: mission.ID,
+	}).First(&shooter)
+
+	if shooter.ID == 0 {
+		thisLogger.Error().Err(db.Client().Error).
+			Str("player_uid", args[0]).
+			Msg("Could not find shooter")
+		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "HIT ERROR", "COULD NOT FIND SHOOTER")
+		return "", errors.New("could not find shooter")
+	}
+	if db.Client().Error != nil {
+		thisLogger.Error().Err(db.Client().Error).
+			Str("player_uid", args[0]).
+			Msg("DB Error")
+		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "HIT ERROR", "DB ERROR")
+		return "", errors.New("db error")
+	}
+
+	// Increment hits
+	shooter.Hits++
+
+	// Update player
+	if err := db.Client().Save(&shooter).Error; err != nil {
+		thisLogger.Error().Err(err).
+			Interface("player", &shooter).
+			Msg("Could not update player")
+		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "HIT ERROR", err.Error())
+		return "", err
 	}
 
 	// Send data back to Arma
@@ -356,9 +561,17 @@ func onAddFPSArgs(
 	// args are:
 	// 0: fps
 
+	thisLogger := logger.With().
+		Interface("context", ctx).
+		Str("call_type", "RvExtensionArgs").
+		Str("command", ":FPS:").
+		Logger()
+
+	thisLogger.Debug().Send()
+
 	// Check size
 	if len(args) != 1 {
-		log.Println("Error: FPS array size is not 1")
+		thisLogger.Error().Err(errors.New("fps array size is not 1")).Strs("args", args).Send()
 		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "FPS ERROR", "WRONG FPS PARAMS COUNT")
 		return "", errors.New("fps array size is not 1")
 	}
@@ -370,16 +583,28 @@ func onAddFPSArgs(
 	// Convert to float64
 	f, err := strconv.ParseFloat(args[0], 64)
 	if err != nil {
-		log.Println("Error: FPS is not a float64")
+		thisLogger.Error().Err(err).
+			Str("fps", args[0]).
+			Msg("FPS is not a float64")
 		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "FPS ERROR", "FPS IS NOT A FLOAT64")
 		return "", errors.New("fps is not a float64")
 	}
 
 	// Add FPS to mission
-	mission.AddFPS(&FPSRecord{
+	fps := &FPSRecord{
 		FPS:     f,
 		TimeUTC: time.Now().UTC(),
-	})
+	}
+
+	// Add FPS to mission associations
+	err = db.Client().Model(&mission).Association("FPSRecords").Append(fps)
+	if err != nil {
+		thisLogger.Error().Err(err).
+			Interface("fps", fps).
+			Msg("Could not add FPS to mission")
+		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "FPS ERROR", err.Error())
+		return "", err
+	}
 
 	// Send data back to Arma
 	return `["Saved FPS data!"]`, nil
@@ -391,12 +616,23 @@ func onExport(
 	data string,
 ) (string, error) {
 
+	thisLogger := logger.With().
+		Interface("context", ctx).
+		Str("call_type", "RvExtension").
+		Str("command", ":EXPORT:").
+		Str("data", data).
+		Logger()
+
+	thisLogger.Debug().Send()
+
 	// Export mission
 	// Get executablepath/stats
 	p := filepath.Join(modulePathDir, "stats-output")
 	err := os.MkdirAll(p, os.ModePerm)
 	if err != nil {
-		log.Println("Error: Could not create stats folder")
+		thisLogger.Error().Err(err).
+			Str("path", p).
+			Msg("Could not create stats-output folder")
 		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "EXPORT ERROR", err.Error())
 		return "", err
 	}
@@ -418,7 +654,9 @@ func onExport(
 	missionBytes, err := json.MarshalIndent(&mission, "", "    ")
 	// catch error
 	if err != nil {
-		log.Println("Error: Could not marshal mission")
+		thisLogger.Error().Err(err).
+			Interface("mission", &mission).
+			Msg("Could not marshal mission to JSON")
 		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "EXPORT ERROR", err.Error())
 		return "", err
 	}
@@ -428,11 +666,14 @@ func onExport(
 
 	// Check for errors
 	if err != nil {
-		log.Println("Error: Could not write mission to file")
+		thisLogger.Error().Err(err).
+			Str("path", fileDestinationAbsolute).
+			Msg("Could not write mission to file")
 		a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "EXPORT ERROR", err.Error())
 		return "", err
 	}
 
+	thisLogger.Info().Str("path", fileDestinationAbsolute).Msg("Exported mission to file")
 	a3interface.WriteArmaCallback(EXTENSION_NAME, "DEBUG", "EXPORT DONE", "EXPORT FINISHED")
 	return fmt.Sprintf(
 			`["Successfully exported data to %s"]`,
@@ -442,5 +683,9 @@ func onExport(
 }
 
 func main() {
+	db.Client().AutoMigrate(&Mission{})
+	db.Client().AutoMigrate(&Player{})
+	db.Client().AutoMigrate(&Kill{})
+	db.Client().AutoMigrate(&FPSRecord{})
 	fmt.Scanln()
 }
